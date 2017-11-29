@@ -4,6 +4,7 @@ const path = require('path');
 const expect = require('./chai').expect;
 const co = require('co');
 const testHelpers = require('broccoli-test-helper');
+const MergeTrees = require('broccoli-merge-trees');
 const eslint = require('..');
 
 const ESLint = eslint;
@@ -69,6 +70,42 @@ describe('broccoli-lint-eslint', function() {
           `b.js: line 1, col 5, Warning - 'foo' is assigned a value but never used. (no-unused-vars)\n`
         )
         .to.contain(`DEPRECATION: Please use the create() factory method`);
+    })
+  );
+
+  it(
+    'accept many:* node if eslintrc specifies overrides',
+    co.wrap(function*() {
+      // we need to create two temp folders with eslintrc files in it
+      const firstDirectory = yield createTempDir();
+      const secondDirectory = yield createTempDir();
+
+      firstDirectory.write({
+        '.eslintrc.js': `module.exports = { rules: { 'no-console': 'error'}, overrides: [ { files: 'a.js', rules: { 'no-console': 'disable' } }] }`,
+        'a.js': `console.log('foo');\n`,
+      });
+
+      secondDirectory.write({
+        '.eslintrc.js': `module.exports = { }`,
+        'a.js': `console.log('foo');\n`,
+      });
+
+      let messages = [];
+      let console = {
+        log(message) {
+          messages.push(message);
+        },
+      };
+
+      const mergedDirectories = new MergeTrees([
+        firstDirectory.path(),
+        secondDirectory.path(),
+      ]);
+      // const mergedDirectories = firstDirectory.path();
+      expect(() => new ESLint(mergedDirectories, { console })).to.not.throw();
+
+      yield firstDirectory.dispose();
+      yield secondDirectory.dispose();
     })
   );
 
